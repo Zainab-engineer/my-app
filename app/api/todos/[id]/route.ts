@@ -5,11 +5,11 @@ const sql = neon(process.env.DATABASE_URL!);
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { completed } = await request.json();
-    const { id } = params;
+    const { id } = await params;
 
     const todos = await sql`
       UPDATE "Todo" 
@@ -37,10 +37,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     const todos = await sql`
       DELETE FROM "Todo" 

@@ -2,10 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, FileEdit, Trash2, Ellipsis, Search } from 'lucide-react';
+import { Plus, FileEdit, Trash2, Ellipsis, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { LogOut } from 'lucide-react';
 
 interface Document {
@@ -22,12 +31,21 @@ export default function DocumentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
+  const [editSheetOpen, setEditSheetOpen] = useState(false);
+  const [editingDoc, setEditingDoc] = useState<Document | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 8;
+  const totalPages = Math.max(1, Math.ceil(documents.length / pageSize));
+  const paginatedDocuments = documents.slice((page - 1) * pageSize, page * pageSize);
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
 
   useEffect(() => {
+    setPage(1);
     fetchDocuments();
   }, [appliedSearch]);
 
@@ -84,27 +102,65 @@ export default function DocumentsPage() {
     }
   };
 
+  const updateDocumentTitle = async (id: string, title: string) => {
+    try {
+      const response = await fetch(`/api/documents/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      if (!response.ok) throw new Error('Failed to update document');
+      setDocuments(documents.map(doc => (doc.id === id ? { ...doc, title } : doc)));
+      setEditSheetOpen(false);
+      setEditingDoc(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    }
+  };
+
   if (isLoading) return <div className="p-6">Loading...</div>;
   if (error) return <div className="p-6 text-red-500">Error: {error}</div>;
 
   return (
-    <div className="flex flex-col h-screen w-full mx-auto px-5 pt-6 pb-8 bg-white max-w-7xl">
+    <div className="flex flex-col h-screen w-full mx-auto px-5 pt-6 pb-8 bg-white max-w-7xl overflow-y-auto">
       <header className="flex w-full flex-row items-center justify-between gap-3 pb-5">
         <h1 className="text-2xl text-foreground font-semibold min-w-0">Documents</h1>
         <div className="flex items-center gap-2">
-          <button
-            onClick={async () => {
-              await fetch('/api/auth/logout', { method: 'POST' });
-              router.push('/');
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </button>
+          <Dialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
+            <DialogTrigger asChild>
+              <button
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Confirm Logout</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to log out? You will be redirected to the home page.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setLogoutDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={async () => {
+                    await fetch('/api/auth/logout', { method: 'POST' });
+                    router.push('/');
+                  }}
+                >
+                  Logout
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
-              <Button className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium h-9 w-9 sm:w-auto px-0 sm:px-3 rounded-[10px] shrink-0 bg-foreground text-background shadow-none hover:bg-gray-800">
+              <Button className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium h-9 w-9 sm:w-auto px-0 sm:px-3 rounded-[10px] shrink-0 bg-foreground text-background shadow-none hover:bg-gray-800 cursor-pointer">
                 <Plus className="shrink-0 w-[18px] h-[18px]" />
                 <span className="hidden sm:inline ml-[6px]">New document</span>
               </Button>
@@ -124,6 +180,34 @@ export default function DocumentsPage() {
                 />
                 <Button type="submit" className="w-full bg-foreground text-background hover:bg-gray-800">
                   Create Document
+                </Button>
+              </form>
+            </SheetContent>
+          </Sheet>
+          <Sheet open={editSheetOpen} onOpenChange={setEditSheetOpen}>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Edit Document Title</SheetTitle>
+              </SheetHeader>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (editingDoc && editTitle.trim()) {
+                    updateDocumentTitle(editingDoc.id, editTitle.trim());
+                  }
+                }}
+                className="mt-6 space-y-4"
+              >
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Document title..."
+                  autoFocus
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <Button type="submit" className="w-full bg-foreground text-background hover:bg-gray-800">
+                  Save
                 </Button>
               </form>
             </SheetContent>
@@ -164,10 +248,10 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1">
         {documents.length > 0 ? (
           <div className="col-span-full grid grid-cols-1 gap-y-2 py-3">
-            {documents.map((doc) => (
+            {paginatedDocuments.map((doc) => (
               <div
                 key={doc.id}
                 className="group/row relative col-span-full px-2.5 grid grid-cols-[1fr_auto_auto] grid-rows-1 items-center py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer"
@@ -195,7 +279,9 @@ export default function DocumentsPage() {
                     className="h-9 w-9 rounded-[10px] text-gray-500 hover:text-foreground hover:bg-gray-100"
                     onClick={(e) => {
                       e.stopPropagation();
-                      router.push(`/documents/${doc.id}`);
+                      setEditingDoc(doc);
+                      setEditTitle(doc.title);
+                      setEditSheetOpen(true);
                     }}
                     aria-label="Edit"
                   >
@@ -220,7 +306,9 @@ export default function DocumentsPage() {
                           className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 rounded-t-lg cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
-                            router.push(`/documents/${doc.id}`);
+                            setEditingDoc(doc);
+                            setEditTitle(doc.title);
+                            setEditSheetOpen(true);
                             setDropdownOpen(null);
                           }}
                         >
@@ -256,6 +344,39 @@ export default function DocumentsPage() {
             >
               <Plus className="w-4 h-4 mr-2" />
               New document
+            </Button>
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 py-4">
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+              className="h-8 w-8 cursor-pointer"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <Button
+                key={p}
+                variant={p === page ? "default" : "outline"}
+                size="icon"
+                onClick={() => setPage(p)}
+                className="h-8 w-8 text-xs cursor-pointer"
+              >
+                {p}
+              </Button>
+            ))}
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={page >= totalPages}
+              onClick={() => setPage(page + 1)}
+              className="h-8 w-8 cursor-pointer"
+            >
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         )}

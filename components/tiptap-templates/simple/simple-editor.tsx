@@ -79,13 +79,22 @@ const MainToolbarContent = ({
   onHighlighterClick,
   onLinkClick,
   isMobile,
+  onBack,
 }: {
   onHighlighterClick: () => void
   onLinkClick: () => void
   isMobile: boolean
+  onBack?: () => void
 }) => {
   return (
     <>
+      {onBack && (
+        <ToolbarGroup>
+          <Button variant="ghost" onClick={onBack}>
+            <ArrowLeftIcon className="tiptap-button-icon" />
+          </Button>
+        </ToolbarGroup>
+      )}
       <Spacer />
 
       <ToolbarGroup>
@@ -102,7 +111,6 @@ const MainToolbarContent = ({
           types={["bulletList", "orderedList", "taskList"]}
         />
         <BlockquoteButton />
-        <CodeBlockButton />
       </ToolbarGroup>
 
       <ToolbarSeparator />
@@ -138,10 +146,6 @@ const MainToolbarContent = ({
       </ToolbarGroup>
 
       <ToolbarSeparator />
-
-      <ToolbarGroup>
-        <ImageUploadButton text="Add" />
-      </ToolbarGroup>
 
       <Spacer />
 
@@ -187,10 +191,12 @@ export function SimpleEditor({
   content: externalContent,
   onUpdate,
   onSelectionChange,
+  onBack,
 }: {
   content?: string
   onUpdate?: (html: string) => void
   onSelectionChange?: (text: string, rect?: DOMRect) => void
+  onBack?: () => void
 }) {
   const isMobile = useIsBreakpoint()
   const { height } = useWindowSize()
@@ -291,6 +297,7 @@ export function SimpleEditor({
               onHighlighterClick={() => setMobileView("highlighter")}
               onLinkClick={() => setMobileView("link")}
               isMobile={isMobile}
+              onBack={onBack}
             />
           ) : (
             <MobileToolbarContent

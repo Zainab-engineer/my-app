@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, FileEdit, Trash2, Ellipsis, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -44,25 +44,28 @@ export default function DocumentsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
 
-  useEffect(() => {
-    setPage(1);
-    fetchDocuments();
-  }, [appliedSearch]);
-
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
     try {
       const params = appliedSearch ? `?search=${encodeURIComponent(appliedSearch)}` : '';
-      const response = await fetch(`/api/documents${params}`);
+      const response = await fetch(`/api/documents${params}`, { signal });
       if (!response.ok) throw new Error('Failed to fetch documents');
       const data = await response.json();
       setDocuments(data);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [appliedSearch]);
+
+  useEffect(() => {
+    const abortController = new AbortController();
+    setPage(1);
+    fetchDocuments(abortController.signal);
+    return () => abortController.abort();
+  }, [fetchDocuments]);
 
   const handleSearch = () => {
     setAppliedSearch(searchInput.trim());
